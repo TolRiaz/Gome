@@ -1,0 +1,8 @@
+https://github.com/faiface/pixel/tree/master/examples/platformer
+
+->golang game example
+
+https://play.jsgo.io/github.com/hajimehoshi/ebiten/examples/flappy
+
+->golang game example2
+
