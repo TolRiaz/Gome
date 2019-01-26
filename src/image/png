@@ -1,0 +1,110 @@
+// 그림 잘라서 불러오기
+
+
+
+
+func randomGroundTexture() int {
+    return texGround1 + rand.Intn(4)
+}
+
+func loadTextures(eng sprite.Engine) []sprite.SubTex {
+    a, err := asset.Open("sprite.png")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer a.Close()
+
+    m, _, err := image.Decode(a)
+    if err != nil {
+        log.Fatal(err)
+    }
+    t, err := eng.LoadTexture(m)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    const n = 128
+    // The +1's and -1's in the rectangles below are to prevent colors from
+    // adjacent textures leaking into a given texture.
+    // See: http://stackoverflow.com/questions/19611745/opengl-black-lines-in-between-tiles
+    return []sprite.SubTex{
+        texGopherRun1:  sprite.SubTex{t, image.Rect(n*0+1, 0, n*1-1, n)},
+        texGopherRun2:  sprite.SubTex{t, image.Rect(n*1+1, 0, n*2-1, n)},
+        texGopherFlap1: sprite.SubTex{t, image.Rect(n*2+1, 0, n*3-1, n)},
+        texGopherFlap2: sprite.SubTex{t, image.Rect(n*3+1, 0, n*4-1, n)},
+        texGopherDead1: sprite.SubTex{t, image.Rect(n*4+1, 0, n*5-1, n)},
+        texGopherDead2: sprite.SubTex{t, image.Rect(n*5+1, 0, n*6-1, n)},
+        texGround1:     sprite.SubTex{t, image.Rect(n*6+1, 0, n*7-1, n)},
+        texGround2:     sprite.SubTex{t, image.Rect(n*7+1, 0, n*8-1, n)},
+        texGround3:     sprite.SubTex{t, image.Rect(n*8+1, 0, n*9-1, n)},
+        texGround4:     sprite.SubTex{t, image.Rect(n*9+1, 0, n*10-1, n)},
+        texEarth:       sprite.SubTex{t, image.Rect(n*10+1, 0, n*11-1, n)},
+    }
+}
+
+
+// 그림 가져다 붙이는 함수 in game.go
+
+func (g *Game) Scene(eng sprite.Engine) *sprite.Node {
+    texs := loadTextures(eng)
+
+    scene := &sprite.Node{}
+    eng.Register(scene)
+    eng.SetTransform(scene, f32.Affine{
+        {1, 0, 0},
+        {0, 1, 0},
+    })
+
+    newNode := func(fn arrangerFunc) {
+        n := &sprite.Node{Arranger: arrangerFunc(fn)}
+        eng.Register(n)
+        scene.AppendChild(n)
+    }
+
+    // The ground.
+    for i := range g.groundY {
+        i := i
+        // The top of the ground.
+        newNode(func(eng sprite.Engine, n *sprite.Node, t clock.Time) {
+            eng.SetSubTex(n, texs[g.groundTex[i]])
+            eng.SetTransform(n, f32.Affine{
+                {tileWidth, 0, float32(i)*tileWidth - g.scroll.x},
+                {0, tileHeight, g.groundY[i]},
+            })
+        })
+        // The earth beneath.
+        newNode(func(eng sprite.Engine, n *sprite.Node, t clock.Time) {
+            eng.SetSubTex(n, texs[texEarth])
+            eng.SetTransform(n, f32.Affine{
+                {tileWidth, 0, float32(i)*tileWidth - g.scroll.x},
+                {0, tileHeight * tilesY, g.groundY[i] + tileHeight},
+            })
+        })
+    }
+
+    // The gopher.
+    newNode(func(eng sprite.Engine, n *sprite.Node, t clock.Time) {
+        a := f32.Affine{
+            {tileWidth * 2, 0, tileWidth*(gopherTile-1) + tileWidth/8},
+            {0, tileHeight * 2, g.gopher.y - tileHeight + tileHeight/4},
+        }
+        var x int
+        switch {
+        case g.gopher.dead:
+            x = frame(t, 16, texGopherDead1, texGopherDead2)
+            animateDeadGopher(&a, t-g.gopher.deadTime)
+        case g.gopher.v < 0:
+            x = frame(t, 4, texGopherFlap1, texGopherFlap2)
+        case g.gopher.atRest:
+            x = frame(t, 4, texGopherRun1, texGopherRun2)
+        default:
+            x = frame(t, 8, texGopherRun1, texGopherRun2)
+        }
+        eng.SetSubTex(n, texs[x])
+        eng.SetTransform(n, a)
+    })
+
+    return scene
+}
+
+
